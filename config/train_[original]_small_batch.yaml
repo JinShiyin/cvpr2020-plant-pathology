@@ -1,0 +1,42 @@
+backbone: se_resnext50_32x4d
+exp_name: batch-small
+data_folder: /data/lxd/datasets/2022-03-02-Eggs
+# data_folder: /data/lxd/datasets/2022-03-17-Egg-Masks/
+training_set: train_4_3.csv
+test_set : test_4_1.csv
+num_classes: 8
+lr: 0.001
+# training 
+train_transforms: non-trivial             
+train_batch_size: 12
+fold_i: 0
+val_batch_size: 6
+anchor_batch_size: 6
+training_mode: ddp
+num_workers: 8
+image_size: [700, 600]
+seed: 2022
+min_epochs: 70
+max_epochs: 70
+gpus: [0,1]
+precision: 16
+gradient_clip_val: 0
+soft_labels_filename: ""
+log_dir: logs_submit
+sample_num: 6
+debug: true
+norm: 
+  mean: [
+    0.2946946918964386,
+    0.0982699915766716,
+    0.06800205260515213
+  ]
+  std: [
+    0.33861711621284485,
+    0.24857985973358154,
+    0.22146739065647125
+  ]
+resume_from_checkpoint: 
+checkpoints: 
+#  - logs_submit/20220319-0212/checkpoints/fold=0-epoch=49-val_loss=0.2538-val_roc_auc=0.9881.ckpt
+ - /data/lxd/project/cvpr2020-plant-pathology/logs_submit/20220319-2105-batch-small/checkpoints/fold=0-epoch=58-val_loss=0.2434-val_roc_auc=0.9904.ckpt

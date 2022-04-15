@@ -1,8 +1,9 @@
-# Author: yican, yelanlan
+# @Author: yican, yelanlan
 # @Date: 2020-07-07 14:48:03
 # @Last Modified by:   yican
 # @Last Modified time: 2020-07-07 14:48:03
 # Standard libraries
+import os
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping
 
@@ -25,6 +26,9 @@ if __name__ == "__main__":
     # Make experiment reproducible
     seed_reproducer(hparams.seed)
 
+    output_dir = "test_results"
+
+    os.makedirs(output_dir, exist_ok=True)
     # init logger
     logger = init_logger("kun_out", log_dir=hparams.log_dir)
 
@@ -34,20 +38,25 @@ if __name__ == "__main__":
     # Generate transforms
     transforms = generate_transforms(hparams.image_size)
 
-    early_stop_callback = EarlyStopping(monitor="val_roc_auc", patience=10, mode="max", verbose=True)
-
     # Instance Model, Trainer and train model
     model = CoolSystem(hparams)
 
     # [folds * num_aug, N, num_classes]
     submission = []
+    # PATH = [
+    #     "logs_submit/fold=0-epoch=67-val_loss=0.0992-val_roc_auc=0.9951.ckpt",
+    #     "logs_submit/fold=1-epoch=61-val_loss=0.1347-val_roc_auc=0.9928.ckpt",
+    #     "logs_submit/fold=2-epoch=57-val_loss=0.1289-val_roc_auc=0.9968.ckpt",
+    #     "logs_submit/fold=3-epoch=48-val_loss=0.1161-val_roc_auc=0.9980.ckpt",
+    #     "logs_submit/fold=4-epoch=67-val_loss=0.1012-val_roc_auc=0.9979.ckpt"
+    # ]
     PATH = [
-        # "logs_submit/fold=0-epoch=69-val_loss=0.1120-val_roc_auc=0.9947.ckpt",
-        "logs_submit/fold=1-epoch=69-val_loss=0.1088-val_roc_auc=0.9976.ckpt",
-        # "logs_submit/fold=2-epoch=69-val_loss=0.1457-val_roc_auc=0.9868.ckpt",
-        # "logs_submit/fold=3-epoch=69-val_loss=0.1366-val_roc_auc=0.9976.ckpt",
-        # "logs_submit/fold=4-epoch=69-val_loss=0.1408-val_roc_auc=0.9831.ckpt"
-    ]
+        "logs_submit/20220305-0932/fold=0-epoch=59-val_loss=0.1946-val_roc_auc=0.9945.ckpt",
+        "logs_submit/20220305-0932/fold=1-epoch=39-val_loss=0.2358-val_roc_auc=0.9913.ckpt",
+        "logs_submit/20220305-0932/fold=2-epoch=49-val_loss=0.2395-val_roc_auc=0.9913.ckpt",
+        "logs_submit/20220305-0932/fold=3-epoch=48-val_loss=0.2291-val_roc_auc=0.9918.ckpt",
+        "logs_submit/20220305-0932/fold=4-epoch=59-val_loss=0.2246-val_roc_auc=0.9926.ckpt",
+        ]
 
     # ==============================================================================================================
     # Test Submit
@@ -65,11 +74,11 @@ if __name__ == "__main__":
         model.to("cuda")
         model.eval()
 
-        for i in range(1):
+        for i in range(8):
             test_preds = []
             labels = []
             with torch.no_grad():
-                for image, label, times in tqdm(test_dataloader):
+                for image, label, times, _ in tqdm(test_dataloader):
                     test_preds.append(model(image.to("cuda")))
                     labels.append(label)
 
@@ -83,4 +92,4 @@ if __name__ == "__main__":
         # sub: N * num_classes
         submission_ensembled += softmax(sub, axis=1) / len(submission)
     test_data.iloc[:, 1:] = submission_ensembled
-    test_data.to_csv("submission_distill_one_no_aug.csv", index=False)
+    test_data.to_csv(os.path.join(output_dir, "submission_distill.csv"), index=False)
