@@ -9,7 +9,7 @@ from pytorch_lightning.callbacks import EarlyStopping
 
 # Third party libraries
 import torch
-from dataset import generate_transforms
+from datasets.dataset import generate_transforms
 from sklearn.model_selection import KFold
 from scipy.special import softmax
 from torch.utils.data import DataLoader
@@ -18,7 +18,7 @@ from tqdm import tqdm
 # User defined libraries
 from train import CoolSystem
 from utils import init_hparams, init_logger, seed_reproducer, load_data
-from dataset import PlantDataset
+from datasets.dataset import PlantDataset
 
 
 if __name__ == "__main__":

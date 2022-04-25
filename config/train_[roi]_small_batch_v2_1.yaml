@@ -1,0 +1,43 @@
+backbone: se_resnext50_32x4d
+exp_name: roi_a4
+description: set min epoch = 70, do not use early stopping, use a2 augmentation
+data_folder: /data/lxd/datasets/2022-04-18-Egg-Masks
+training_set: train.csv
+test_set: test.csv
+test_real_world_set: null
+test_real_world_num: 1
+num_classes: 8
+lr: 0.001
+train_transforms: a4
+train_batch_size: 4
+test_batch_size: 4
+val_batch_size: 4
+train_num_workers: 4
+val_num_workers: 0
+test_num_workers: 8
+fold_i: 0
+anchor_batch_size: 6
+save_top_k: 6
+training_mode: ddp
+image_size: [600, 600]
+seed: 2022
+min_epochs: 20
+max_epochs: 70
+patience: 20
+gpus: [1]
+precision: 16
+gradient_clip_val: 0
+soft_labels_filename: ''
+log_dir: logs_submit
+sample_num: 6
+debug: true
+clean_debug: false
+norm:
+  mean: [0, 0, 0]
+  std: [1, 1, 1]
+resume_from_checkpoint: null
+skip_folds: [0, 1, 2, 3, 4]
+checkpoints: null
+num_workers: 8
+metrics: mAP
+eval_mode: train

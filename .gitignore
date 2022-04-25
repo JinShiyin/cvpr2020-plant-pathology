@@ -6,3 +6,5 @@ outputs
 test_results
 torch-cam
 .vscode
+*.png
+*.jpg

@@ -1,21 +1,21 @@
 backbone: se_resnext50_32x4d
-exp_name: roi-batch-large-min-epoch-non-trivial
-description: set min epoch = 70, do not use early stopping
-data_folder: /data/lxd/datasets/2022-03-17-Egg-Masks/
-training_set: train_4_3.csv
-test_set: test_4_1.csv
+exp_name: original_224
+description: original
+data_folder: /data/lxd/datasets/2022-04-18-Eggs
+training_set: train.csv
+test_set: test.csv
 num_classes: 8
 lr: 0.001
 train_transforms: a2
-train_batch_size: 48
+train_batch_size: 256
 fold_i: 0
-val_batch_size: 96
+val_batch_size: 128
 anchor_batch_size: 6
 training_mode: ddp
 num_workers: 8
-image_size: [600, 600]
+image_size: [700, 600]
 seed: 2022
-min_epochs: 70
+min_epochs: 10
 max_epochs: 70
 gpus: [0, 1]
 precision: 16
@@ -25,20 +25,19 @@ log_dir: logs_submit
 sample_num: 6
 debug: false
 norm:
-  mean: [0, 0, 0]
-  std: [1, 1, 1]
+  mean: [0.29655125737190247, 0.09730149805545807, 0.06337454915046692]
+  std: [0.3412066698074341, 0.24394549429416656, 0.21203480660915375]
 resume_from_checkpoint: null
 checkpoints: [logs_submit/20220319-0212/checkpoints/fold=0-epoch=37-val_loss=0.2775-val_roc_auc=0.9872.ckpt]
 test_real_world_set: seed
 test_real_world_num: 1
 save_top_k: 5
-patience: 20
+patience: 10
 clean_debug: true
 skip_folds: [0, 1, 2, 3, 4]
-test_batch_size: 24
-train_num_workers: 8
+test_batch_size: 128
+train_num_workers: 16
 val_num_workers: 0
 test_num_workers: 8
 resume_from_the_last_fold: true
 metrics: mAP
-eval_mode: train

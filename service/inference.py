@@ -9,7 +9,7 @@ from tqdm import tqdm
 import gc
 
 # User defined libraries
-from dataset import OpticalCandlingDataset, generate_transforms, PlantDataset
+from datasets.dataset import OpticalCandlingDataset, generate_transforms, PlantDataset
 from utils import init_hparams, init_logger, load_test_data, seed_reproducer, load_data
 from multiprocessing import Process, Manager, Pool
 import numpy as np

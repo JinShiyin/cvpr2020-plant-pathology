@@ -12,8 +12,9 @@ fold_i: 0
 val_batch_size: 128
 anchor_batch_size: 6
 training_mode: ddp
+eval_mode: train
 num_workers: 8
-image_size: [700, 600]
+image_size: [264, 224]
 seed: 2022
 min_epochs: 10
 max_epochs: 70
@@ -25,20 +26,18 @@ log_dir: logs_submit
 sample_num: 6
 debug: false
 norm:
-  mean: [0.29655125737190247, 0.09730149805545807, 0.06337454915046692]
-  std: [0.3412066698074341, 0.24394549429416656, 0.21203480660915375]
-resume_from_checkpoint: null
-checkpoints: [logs_submit/20220319-0212/checkpoints/fold=0-epoch=37-val_loss=0.2775-val_roc_auc=0.9872.ckpt]
+  mean: [0, 0, 0]
+  std: [1, 1, 1]
+resume_from_checkpoint: /data/lxd/project/cvpr2020-plant-pathology/logs_submit/202204231613-original_224/checkpoints
+checkpoints: 
 test_real_world_set: seed
 test_real_world_num: 1
 save_top_k: 5
 patience: 10
 clean_debug: true
-skip_folds: [0, 1, 2, 3, 4]
+skip_folds: []
 test_batch_size: 128
-train_num_workers: 16
-val_num_workers: 0
+train_num_workers: 8
+val_num_workers: 8
 test_num_workers: 8
-resume_from_the_last_fold: true
-metrics: mAP
-eval_mode: train
+metrics: 'mAP'

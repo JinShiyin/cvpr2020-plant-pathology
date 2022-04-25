@@ -5,25 +5,30 @@
 # Standard libraries
 import logging
 import os
+import pdb
 import random
 from argparse import ArgumentParser
 from logging import Logger
 from logging.handlers import TimedRotatingFileHandler
 import shutil
 from tkinter.font import names
-
+import time as ts
 # Third party libraries
 import cv2
 import numpy as np
 import pandas as pd
 import torch
 from dotmap import DotMap
-
+from os.path import dirname
+from pytorch_lightning import seed_everything
+from pytorch_lightning.loggers.base import LightningLoggerBase
+from pytorch_lightning.utilities.distributed import rank_zero_only
 IMG_SHAPE = (700, 600, 3)
 IMAGE_FOLDER = "data/images"
 NPY_FOLDER = "/home/public_data_center/kaggle/plant_pathology_2020/npys"
 LOG_FOLDER = "logs"
 import yaml
+
 
 def mkdir(path: str):
     """Create directory.
@@ -60,6 +65,7 @@ def seed_reproducer(seed=2020):
     -------
     seed_reproducer(seed=2019).
     """
+    seed_everything(seed)
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
@@ -71,61 +77,177 @@ def seed_reproducer(seed=2020):
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.enabled = True
 
+
 def get_parser():
     parser = ArgumentParser()
-    parser.add_argument('--config', type=str,
-                        default='config/train_[original]_small_batch.yaml', help='config path')
+    parser.add_argument('--config',
+                        type=str,
+                        default='config/train_[original]_small_batch.yaml',
+                        help='config path')
     return parser
 
 
-def get_args(args):
-    with open(args.config) as cfg:
+def get_args(config):
+    with open(config, encoding='utf-8') as cfg:
         cfg = yaml.load(cfg, Loader=yaml.FullLoader)
         cfg = DotMap(cfg, _dynamic=False)
     return cfg
 
-def init_hparams():
-    parser :ArgumentParser = get_parser()
-    args = parser.parse_args()
-    hparams = get_args(args)
-    # parser = ArgumentParser(add_help=False)
-    # parser.add_argument("-backbone",
-    #                     "--backbone",
-    #                     type=str,
-    #                     default="se_resnext50_32x4d")
-    # # parser.add_argument("--data_folder",
-    #                     # default='/data/lxd/datasets/2021-12-12-Eggs')
-    # parser.add_argument("--data_folder",
-    #                     default='/data/lxd/datasets/2022-03-02-Eggs')
-    # parser.add_argument("-tbs", "--train_batch_size", type=int, default=32 * 1)
-    # parser.add_argument("-vbs", "--val_batch_size", type=int, default=32 * 1)
-    # parser.add_argument("-tm", "--training_mode", type=str, default='ddp')
-    # parser.add_argument("--num_workers", type=int, default=16)
-    # parser.add_argument("--image_size", nargs="+", default=[700, 600])
-    # parser.add_argument("--seed", type=int, default=2022)
-    # parser.add_argument("--min_epochs", type=int, default=70)
-    # parser.add_argument("--max_epochs", type=int, default=70)
-    # parser.add_argument("--gpus", nargs="+", default=[2, 3])  # 输入1 2 3
-    # parser.add_argument("--precision", type=int, default=16)
-    # parser.add_argument("--gradient_clip_val", type=float, default=0)
-    # parser.add_argument("--soft_labels_filename", type=str, default="")
-    # parser.add_argument("--log_dir", type=str, default="logs_submit")
-    # parser.add_argument("--sample_num", type=int, default=6)
-    # try:
-    #     hparams = parser.parse_args()
-    # except:
-    #     hparams = parser.parse_args([])
-    # hparams = DotMap(vars(hparams), _dynamic=False)
+
+def retrival_yaml(path):
+    return [
+        os.path.join(path, filename) for filename in os.listdir(path)
+        if filename.endswith('.yaml')
+    ][0]
+
+
+def get_fold_i(checkpoint_path):
+    checkpoint_name = os.path.basename(checkpoint_path)
+    names = checkpoint_name.split('-')
+    fold_i = 0
+    for name in names:
+        if 'fold' in name:
+            fold_i = int(name.split('=')[-1])
+            break
+    return fold_i
+
+
+def parse_checkpoint_meta_info(checkpoint_name):
+    names = os.path.splitext(checkpoint_name)[0].split('-')
+    meta = {}
+    for name in names:
+        if 'fold' in name:
+            fold_i = int(name.split('=')[-1])
+            meta['fold'] = fold_i
+        if 'val_loss' in name:
+            val_loss = float(name.split('=')[-1])
+            meta['val_loss'] = val_loss
+        if 'val_roc_auc' in name:
+            val_roc_auc = float(name.split('=')[-1])
+            meta['val_roc_auc'] = val_roc_auc
+        if 'other_loss' in name:
+            other_loss = float(name.split('=')[-1])
+            meta['other_loss'] = other_loss
+        if 'other_roc_auc' in name:
+            other_roc_auc = float(name.split('=')[-1])
+            meta['other_roc_auc'] = other_roc_auc
+    return DotMap(meta)
+
+
+def parse_checkpoint_dir(checkpoint_dir):
+    checkpoint_names = os.listdir(checkpoint_dir)
+    best_checkpoint_paths = {}
+    best_val_roc_auc = {}
+    for checkpoint_name in checkpoint_names:
+        if not checkpoint_name.startswith(
+                'fold') or 'test-real-world' in checkpoint_name:
+            continue
+        meta = parse_checkpoint_meta_info(checkpoint_name)
+        fold = meta.fold
+        val_roc_auc = meta.val_roc_auc
+        if fold not in best_checkpoint_paths:
+            best_checkpoint_paths[fold] = os.path.join(checkpoint_dir,
+                                                       checkpoint_name)
+        if fold not in best_val_roc_auc:
+            best_val_roc_auc[fold] = val_roc_auc
+        if best_val_roc_auc[fold] < val_roc_auc:
+            best_checkpoint_paths[fold] = os.path.join(checkpoint_dir,
+                                                       checkpoint_name)
+            best_val_roc_auc[fold] = val_roc_auc
+    return DotMap(best_checkpoint_paths)
+
+
+def parse_checkpoint_path(checkpoint_path):
+    checkpoint_name = os.path.basename(checkpoint_path)
+    names = checkpoint_name.split('-')
+    fold_i = 0
+    for name in names:
+        if 'fold' in name:
+            fold_i = int(name.split('=')[-1])
+            break
+    return DotMap({fold_i: checkpoint_path})
+
+
+def parse_checkpoint_paths(checkpoint_input):
+    if os.path.isdir(checkpoint_input):
+        return parse_checkpoint_dir(checkpoint_input)
+    else:
+        return parse_checkpoint_path(checkpoint_input)
+
+
+def init_hparams(config_path=None):
+    if config_path is None:
+        parser: ArgumentParser = get_parser()
+        args = parser.parse_args()
+        hparams = get_args(args.config)
+        hparams.config = args.config
+    else:
+        hparams = get_args(config_path)
+        hparams.config = config_path
     if len(hparams.gpus) == 1:
         hparams.gpus = [int(hparams.gpus[0])]
     else:
         hparams.gpus = [int(gpu) for gpu in hparams.gpus]
-    hparams.image_size = [int(size) for size in hparams.image_size]
-    hparams.config = args.config
     return hparams
+
+
+# def init_hparams():
+#     parser: ArgumentParser = get_parser()
+#     args = parser.parse_args()
+#     hparams = get_args(args)
+#     if len(hparams.gpus) == 1:
+#         hparams.gpus = [int(hparams.gpus[0])]
+#     else:
+#         hparams.gpus = [int(gpu) for gpu in hparams.gpus]
+#     hparams.image_size = [int(size) for size in hparams.image_size]
+#     hparams.config = args.config
+#     return hparams
+
 
 def backup_config(config_path, output_path):
     shutil.copy(config_path, output_path)
+
+
+def init_training_config():
+    """create training configuration from the command parameters, 
+    or loading from history checkpoints.
+
+    Returns:
+        _type_: _description_
+    """
+    hparams = init_hparams()
+    resume_from_checkpoint = hparams.resume_from_checkpoint
+    if resume_from_checkpoint is None:
+        timestamp = ts.strftime("%Y%m%d%-H%M", ts.localtime())
+        exp_name = hparams.exp_name
+        hparams.log_dir = os.path.join(hparams.log_dir,
+                                       f'{timestamp}-{exp_name}')
+        os.makedirs(hparams.log_dir, exist_ok=True)
+        backup_config(hparams.config, hparams.log_dir)
+    else:
+        output = dirname(resume_from_checkpoint) if os.path.isdir(
+            resume_from_checkpoint) else dirname(resume_from_checkpoint)
+        config = retrival_yaml(output)
+        hparams = init_hparams(config)
+        hparams.log_dir = output
+        hparams.resume_from_checkpoint = parse_checkpoint_paths(
+            resume_from_checkpoint)
+        print(f'Resume configuration from {hparams.log_dir}')
+    # else:
+    #     output = dirname(dirname(resume_from_checkpoint))
+    #     config = retrival_yaml(output)
+    #     hparams = init_hparams(config)
+    #     hparams.log_dir = output
+    #     hparams.resume_from_checkpoint = resume_from_checkpoint
+    #     hparams.fold_i = get_fold_i(resume_from_checkpoint)
+    #     print(
+    #         f'Fold {hparams.fold_i}, Resume configuration from {hparams.log_dir}.'
+    #     )
+    checkpoint_dir = os.path.join(hparams.log_dir, 'checkpoints')
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    hparams.checkpoint_dir = checkpoint_dir
+    return hparams
+
 
 def load_data(logger, frac=1):
     data, test_data = pd.read_csv("data/train.csv"), pd.read_csv(
@@ -140,7 +262,8 @@ def load_data(logger, frac=1):
 
 def load_training_data(logger, data_folder, frac=1):
     data, test_data = pd.read_csv(os.path.join(
-        data_folder, 'train_4_3.csv')), pd.read_csv("data/sample_submission.csv")
+        data_folder,
+        'train_4_3.csv')), pd.read_csv("data/sample_submission.csv")
     # Do fast experiment
     if frac < 1:
         logger.info(f"use frac : {frac}")
@@ -151,7 +274,8 @@ def load_training_data(logger, data_folder, frac=1):
 
 def load_test_data(logger, data_folder, frac=1):
     data, test_data = pd.read_csv(os.path.join(
-        data_folder, 'test_4_1.csv')), pd.read_csv("data/sample_submission.csv")
+        data_folder,
+        'test_4_1.csv')), pd.read_csv("data/sample_submission.csv")
     # Do fast experiment
     if frac < 1:
         logger.info(f"use frac : {frac}")
@@ -159,16 +283,17 @@ def load_test_data(logger, data_folder, frac=1):
         test_data = test_data.sample(frac=frac).reset_index(drop=True)
     return data, test_data
 
+
 def load_test_data_with_header(logger, data_folder, header_names, frac=1):
-    data, test_data = pd.read_csv(os.path.join(
-        data_folder, 'test_4_1.csv'), names=header_names), pd.read_csv("data/sample_submission.csv")
+    data, test_data = pd.read_csv(
+        os.path.join(data_folder, 'test_4_1.csv'),
+        names=header_names), pd.read_csv("data/sample_submission.csv")
     # Do fast experiment
     # if frac < 1:
-        # logger.info(f"use frac : {frac}")
-        # data = data.sample(frac=frac).reset_index(drop=True)
-        # test_data = test_data.sample(frac=frac).reset_index(drop=True)
+    # logger.info(f"use frac : {frac}")
+    # data = data.sample(frac=frac).reset_index(drop=True)
+    # test_data = test_data.sample(frac=frac).reset_index(drop=True)
     return data, test_data
-
 
 
 def init_logger(log_name, log_dir=None):
@@ -235,3 +360,28 @@ def read_image(image_path):
         48.7 ms ± 2.24 ms -> plt.imread(image_path)
     """
     return cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
+
+class TerminalLogger(LightningLoggerBase):
+
+    @property
+    def name(self):
+        return "TerminalLogger"
+
+    @property
+    def version(self):
+        # Return the experiment version, int or str.
+        return "1.0"
+
+
+    @rank_zero_only
+    def log_metrics(self, metrics, step):
+        # metrics is a dictionary of metric names and values
+        # your code to record metrics goes here
+        pass
+
+
+    @rank_zero_only
+    def finalize(self, status):
+        # Optional. Any code that needs to be run after training
+        # finishes goes here
+        pass

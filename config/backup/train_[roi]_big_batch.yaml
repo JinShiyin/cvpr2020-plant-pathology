@@ -41,4 +41,3 @@ val_num_workers: 0
 test_num_workers: 8
 resume_from_the_last_fold: true
 metrics: mAP
-eval_mode: train

@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 # User defined libraries
-from dataset import OpticalCandlingDataset, generate_transforms, PlantDataset
+from datasets.dataset import OpticalCandlingDataset, generate_transforms, PlantDataset
 from train import CoolSystem
 from utils import init_hparams, init_logger, load_test_data, seed_reproducer, load_data
 

@@ -1,9 +1,10 @@
 backbone: se_resnext50_32x4d
 exp_name: roi-batch-large-min-epoch-non-trivial
-description: set min epoch = 70, do not use early stopping
+description: set min epoch = 70, do not use early stopping, use a2 augmentation
 data_folder: /data/lxd/datasets/2022-03-17-Egg-Masks/
-training_set: train_4_3.csv
-test_set: test_4_1.csv
+training_set: train.csv
+test_set: test.csv
+test_real_world_set: seed
 num_classes: 8
 lr: 0.001
 train_transforms: a2
@@ -25,11 +26,10 @@ log_dir: logs_submit
 sample_num: 6
 debug: false
 norm:
-  mean: [0, 0, 0]
-  std: [1, 1, 1]
+  mean: [0.4755111336708069, 0.15864244103431702, 0.09940344840288162]
+  std: [0.33696553111076355, 0.295562744140625, 0.2568116784095764]
 resume_from_checkpoint: null
 checkpoints: [logs_submit/20220319-0212/checkpoints/fold=0-epoch=37-val_loss=0.2775-val_roc_auc=0.9872.ckpt]
-test_real_world_set: seed
 test_real_world_num: 1
 save_top_k: 5
 patience: 20

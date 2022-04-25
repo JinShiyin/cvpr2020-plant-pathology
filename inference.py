@@ -13,7 +13,7 @@ from torchvision.utils import save_image
 from tqdm import tqdm
 
 # User defined libraries
-from dataset import OpticalCandlingDataset, generate_transforms
+from datasets.dataset import OpticalCandlingDataset, generate_transforms
 from train import CoolSystem
 from utils import init_hparams, init_logger, load_test_data, seed_reproducer 
 # from torchvision.transforms.functional import normalize, resize, to_pil_image

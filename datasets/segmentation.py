@@ -6,7 +6,70 @@ import numpy as np
 from matplotlib import pyplot
 import os
 import json
-
+def segmentation(image_path):
+    """select roi mask and air room mask using segmentation algorithm 
+    Args:
+        image_path (_type_): _description_
+    """
+    # 读取图像
+    image = cv2.imread(image_path, flags=cv2.IMREAD_UNCHANGED)
+    rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    smooth_img = cv2.pyrMeanShiftFiltering(rgb_image, 20, 40)
+    # gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    rgb_image_result = rgb_image.copy()
+    # gray_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
+    gray_image = cv2.cvtColor(smooth_img, cv2.COLOR_RGB2GRAY)
+ 
+    th = 10
+    ret, thresh_image = cv2.threshold(gray_image, th, 255, cv2.THRESH_BINARY)
+    # ret, thresh_image = cv2.adaptiveThreshold(gray_image, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+ 
+    # noise removal
+    kernel = np.ones((3, 3), np.uint8)
+    opening_image = cv2.morphologyEx(thresh_image, cv2.MORPH_OPEN, kernel, iterations=2)
+    # sure background area
+    sure_bg_image = cv2.dilate(opening_image, kernel, iterations=3)
+    # Finding sure foreground area
+    dist_transform = cv2.distanceTransform(opening_image, cv2.DIST_L2, 5)
+    ret, sure_fg_image = cv2.threshold(dist_transform, 0.7 * dist_transform.max(), 255, 0)
+    # Finding unknown region
+    sure_fg_image = np.uint8(sure_fg_image)
+    masked_img = cv2.subtract(sure_bg_image, sure_fg_image)
+ 
+    # Marker labelling
+    ret, markers_image = cv2.connectedComponents(sure_fg_image)
+    # Add one to all labels so that sure background is not 0, but 1
+    markers_image = markers_image + 1
+    # Now, mark the region of unknown with zero
+    markers_image[masked_img == 255] = 0
+ 
+    markers_image = cv2.watershed(rgb_image_result, markers_image)
+    rgb_image_result[markers_image == -1] = [255, 0, 0]
+ 
+    # 显示图像
+    dpi = 100
+    pyplot.figure('Image Display', figsize=[9, 9])
+    titles = ['Original Image', 'Smooth Image', 'Gray Image', 'Thresh Image', 'ForeGround Image', 'BackGround Image',
+              'Markers Image', 'Result Image']
+    images = [rgb_image, smooth_img, gray_image, thresh_image, sure_fg_image, sure_bg_image, markers_image, rgb_image_result]
+    cols = 4
+    rows = len(images) // 4 + 1
+    for i in range(len(images)):
+        pyplot.subplot(rows, cols, i + 1)
+        pyplot.imshow(images[i], 'gray')
+        pyplot.title(titles[i])
+        pyplot.xticks([])
+        pyplot.yticks([])
+    # pyplot.show()
+    filename = os.path.splitext(os.path.basename(image_path))[0]
+    pyplot.savefig(f'{th}_Result_{filename}.png')
+ 
+    # 根据用户输入保存图像
+    # if ord("q") == (cv2.waitKey(0) & 0xFF):
+        # 销毁窗口
+        # pyplot.close('all')
+    return
+ 
 def detect_esplise(image):
     params = cv2.SimpleBlobDetector_Params()
     # Set Area filtering parameters
@@ -66,22 +129,7 @@ def get_roi(image, mask):
     roi[p_tl[1]:p_br[1], p_tl[0]:p_br[0]] = cropped_roi
     return cropped_roi, max_component, image, p_tl, p_br, roi
 
-def segmentation(input_dir, in_filename, output_dir, debug=True):
-    """generate the egg masks of samples. The masks are saved by 
-    categories. 'egg_roi' saves the main region of egg. 
-
-    Args:
-        input_dir (_type_): _description_
-        in_filename (_type_): _description_
-        output_dir (_type_): _description_
-        debug (bool, optional): _description_. Defaults to True.
-
-    Raises:
-        Exception: _description_
-
-    Returns:
-        _type_: _description_
-    """
+def segmentation(input_dir, in_filename, output_dir, debug=False):
     image_path = os.path.join(input_dir, in_filename)
     image = cv2.imread(image_path)
     if image is None:
@@ -98,7 +146,7 @@ def segmentation(input_dir, in_filename, output_dir, debug=True):
     ar_roi_out = os.path.join(output_dir, 'ar_roi')
     debug_out = os.path.join(output_dir, 'debug')
     out_dirs = [egg_mask_out, air_room_mask_out, egg_roi_out, ar_roi_out, debug_out]
-    filename = f'{filename}.png'
+    filename = f'{filename}.jpg'
     for out in out_dirs:
         os.makedirs(out, exist_ok=True)
     
@@ -174,36 +222,35 @@ def segmentation(input_dir, in_filename, output_dir, debug=True):
     print(f'Processed {image_path}')
     return {filename : {'egg_roi': [egg_tl[0], egg_tl[1], egg_br[0], egg_br[1]], 'air_room_roi': [ar_tl[0], ar_tl[1], ar_br[0], ar_br[1]]}}
         
-        
 
-if __name__ == '__main__':
-    # image_path =  '/Users/shandalau/Documents/Project/EggsCanding/2022-02-13-Eggs-Test/000513851_Egg1_(ok)_R_0_cam2.bmp'
-    # image_path =  '/Users/shandalau/Documents/Project/EggsCanding/2022-02-13-Eggs-Test/153729136_Egg3_(ruopei--ok)_R_0_cam4.bmp'
-    base_output_dir = 'datasets/2022-03-17-Egg-Masks'
-    os.makedirs(base_output_dir, exist_ok=True)
-    # filenames = ['153729136_Egg3_(ruopei--ok)_R_0_cam4.bmp', '174525346_Egg6_(sipei)_L_0_cam5.bmp']
-    # filenames = ['174525346_Egg6_(sipei)_L_0_cam5.bmp']
+def init_seg(input_dir, output_dir):
+    os.makedirs(output_dir, exist_ok=True)
     with Pool(8) as pool:
-        input_dir = '/Users/shandalau/Documents/Project/EggsCanding/datasets/2022-03-02-Eggs'
-        manager = Manager()
         roi_dict = {} # 读取图像
         results = []
         classnames = [classname for classname in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, classname))]
         print(classnames)
         for classname in classnames:
-            class_dir = os.path.join(input_dir, classname)
-            filenames = os.listdir(class_dir)
-            output_dir = os.path.join(base_output_dir, classname) 
-            os.makedirs(output_dir, exist_ok=True)
+            in_class_dir = os.path.join(input_dir, classname)
+            filenames = [filename for filename in os.listdir(in_class_dir) if filename.endswith('.jpg')]
+            out_class_dir = os.path.join(output_dir, classname) 
+            os.makedirs(out_class_dir, exist_ok=True)
             for filename in filenames:
-                result = pool.apply_async(segmentation, args=(class_dir, filename, output_dir,))
+                result = pool.apply_async(segmentation, args=(in_class_dir, filename, out_class_dir,))
                 results.append(result)
-            for result in results:
-                roi_dict.update(result.get())
-            with open(os.path.join(output_dir, 'roi.json'), 'w') as f:
-                json.dump(roi_dict, f, indent=2)
+        for result in results:
+            roi_dict.update(result.get())
+        with open(os.path.join(output_dir, 'roi.json'), 'w') as f:
+            json.dump(roi_dict, f, indent=2)
         pool.close()
         pool.join()
+
+        
+
+if __name__ == '__main__':
+    output_dir = '/Users/shandalau/Datasets/EggCanding/2022-04-15-Egg-Masks'
+    input_dir = '/Users/shandalau/Datasets/EggCanding/2022-04-15-Eggs'
+    init_seg(input_dir, output_dir)
     # img = cv2.imread(image_path)
     # img = cv2.pyrMeanShiftFiltering(img, 20, 40)
     # cv2.imshow('test', img)

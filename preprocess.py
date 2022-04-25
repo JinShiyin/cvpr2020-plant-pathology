@@ -6,7 +6,7 @@ import csv
 import random
 import cv2
 import pandas as pd
-from dataset import generate_tensor_dataloaders, generate_transforms
+from datasets.dataset import generate_tensor_dataloaders, generate_transforms
 from tqdm import tqdm
 from utils import *
 input_dir = '/data/lxd/datasets/2022-04-15-Eggs'
@@ -114,14 +114,14 @@ def random_positive_negative(input_dir, output_dir):
     sample_pos = pos # we take all the positive samples which are occupying a dominant number in test set.
     # sample_neg = neg.sample(n=neg_num)
 
-    num_avg_per_neg_class = neg_num // len(header_names[2:])
+    num_avg_per_neg_class = neg_num // len(HEADER_NAMES[2:])
     # generate 10 groups of test sets.
     seeds = np.arange(start=2013, stop=2023)
     for idx, seed in enumerate(seeds):
         sample_neg = []
         print(f'Using seed {seed}')
         seed_reproducer(seed)
-        for neg_class_name in header_names[2:]:
+        for neg_class_name in HEADER_NAMES[2:]:
             sample_neg_per = test_data.loc[test_data['filename'].str.startswith(neg_class_name)].sample(n=num_avg_per_neg_class)
             sample_neg.append(sample_neg_per)
         # print(sample_neg[0])

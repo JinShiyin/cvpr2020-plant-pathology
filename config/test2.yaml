@@ -1,13 +1,11 @@
 backbone: se_resnext50_32x4d
 exp_name: batch-small
 data_folder: /data/lxd/datasets/2022-03-02-Eggs
-# data_folder: /data/lxd/datasets/2022-03-17-Egg-Masks/
 training_set: train_4_3.csv
-test_set : test_4_1.csv
+test_set: test_4_1.csv
 num_classes: 8
 lr: 0.001
-# training 
-train_transforms: non-trivial             
+train_transforms: a1
 train_batch_size: 12
 val_batch_size: 6
 anchor_batch_size: 6
@@ -17,26 +15,30 @@ image_size: [700, 600]
 seed: 2022
 min_epochs: 70
 max_epochs: 70
-gpus: [0,1]
+gpus: [0, 1]
 precision: 16
 gradient_clip_val: 0
 fold_i: 0
-soft_labels_filename: ""
+soft_labels_filename: ''
 log_dir: logs_submit
 sample_num: 6
 debug: false
-norm: 
-  mean: [
-  0.485, 
-  0.456, 
-  0.406
-  ]
-  std: [
-    0.229, 
-    0.224, 
-    0.225
-]
-resume_from_checkpoint: 
-checkpoints: 
-#  - logs_submit/20220319-0212/checkpoints/fold=0-epoch=49-val_loss=0.2538-val_roc_auc=0.9881.ckpt
- - /data/lxd/project/cvpr2020-plant-pathology/logs_submit/20220305-0932/fold=0-epoch=59-val_loss=0.1946-val_roc_auc=0.9945.ckpt
+norm:
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+resume_from_checkpoint: null
+checkpoints: [/data/lxd/project/cvpr2020-plant-pathology/logs_submit/20220305-0932/fold=0-epoch=59-val_loss=0.1946-val_roc_auc=0.9945.ckpt]
+description: set min epoch = 70, use early stopping, use a2 augmentation
+test_real_world_set: seed
+test_real_world_num: 1
+save_top_k: 5
+patience: 20
+clean_debug: true
+skip_folds: [0, 1, 2, 3, 4]
+test_batch_size: 24
+train_num_workers: 8
+val_num_workers: 0
+test_num_workers: 8
+resume_from_the_last_fold: true
+metrics: mAP
+eval_mode: train
